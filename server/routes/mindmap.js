@@ -7,7 +7,7 @@ const File = require('../models/File');
 const User = require('../models/User');
 const UserMultiLLMManager = require('../services/UserMultiLLMManager');
 const serviceManager = require('../services/serviceManager');
-const MindMapGenerator = require('../services/MindMapGenerator');
+const MindMapGenerator = require('../services/mindMapGenerator');
 const DocumentProcessor = require('../services/documentProcessor');
 
 router.post('/generate', tempAuth, async (req, res) => {

@@ -81,6 +81,11 @@ class MultiLLMManager {
         return await model.generateChatResponse(userMessage, documentChunks, chatHistory, systemPrompt);
     }
     
+    async generateText(prompt) {
+        const model = this.getChatModel(prompt);
+        return await model.generateText(prompt);
+    }
+    
     async generateMindMapData(documentContent, title) {
         const model = this.getMindMapModel(documentContent);
         return await model.generateMindMapFromTranscript(documentContent, title);

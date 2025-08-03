@@ -13,13 +13,33 @@ class GeminiAI {
         
         try {
             if (!this.model) {
+                console.warn('Gemini model not initialized, using fallback response');
                 return this.getFallbackResponse(userMessage, context);
             }
+            
             const result = await this.model.generateContent(prompt);
             const response = result.response;
-            return response.text().trim();
+            const responseText = response.text().trim();
+            
+            // Validate response quality
+            if (!responseText || responseText.length < 3) {
+                console.warn('Received empty or very short response from Gemini, using fallback');
+                return this.getFallbackResponse(userMessage, context);
+            }
+            
+            return responseText;
         } catch (error) {
             console.error('Gemini chat response error:', error.message);
+            
+            // Check for specific error types and provide appropriate fallbacks
+            if (error.message?.includes('API key')) {
+                return "I'm currently unable to connect to the AI service due to configuration issues. Please ensure your API key is properly set up.";
+            } else if (error.message?.includes('rate limit')) {
+                return "I'm experiencing high traffic right now. Please wait a moment and try again.";
+            } else if (error.message?.includes('blocked')) {
+                return "I understand your question, but I'm not able to provide a response to that particular query. Could you try rephrasing it?";
+            }
+            
             return this.getFallbackResponse(userMessage, context);
         }
     }
@@ -172,10 +192,34 @@ Provide the presentation outline in a structured Markdown format.`;
     }
 
     getFallbackResponse(userMessage, context) {
+        // Provide more intelligent fallback responses based on message content
+        const lowerMessage = userMessage.toLowerCase();
+        
+        // Handle greetings
+        if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+            return "Hello! I'm TutorAI, your learning assistant. While I'm experiencing some technical difficulties with my main AI system, I'm still here to help. How can I assist you today?";
+        }
+        
+        // Handle thanks
+        if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
+            return "You're welcome! I'm glad I could help. Is there anything else you'd like to know?";
+        }
+        
+        // Handle help requests
+        if (lowerMessage.includes('help') || lowerMessage.includes('assist')) {
+            return "I'd be happy to help you! I can assist with explanations, answer questions about uploaded documents, generate study materials, and more. What would you like help with?";
+        }
+        
         if (context && context !== 'No relevant document context available.') {
-            return `I understand you're asking about: "${userMessage}". Based on the available documents, I can see relevant information, but I'm currently unable to provide a detailed AI-generated response. Please try again later or contact support if the issue persists.`;
+            return `I understand you're asking about: "${userMessage}". I can see you have relevant documents available, but I'm currently experiencing technical difficulties with my AI processing. Please try again in a moment, or try rephrasing your question.`;
         } else {
-            return `I understand you're asking: "${userMessage}". I'm currently unable to provide an AI-generated response. Please try again later or contact support if the issue persists.`;
+            return `Thank you for your question: "${userMessage}". I'm currently experiencing some technical difficulties, but I'm working to resolve them. In the meantime, you might try:
+            
+• Uploading a document to get context-specific help
+• Asking a more specific question
+• Trying again in a few moments
+
+I'm here to help with your learning journey!`;
         }
     }
 

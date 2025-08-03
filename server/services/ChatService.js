@@ -1,5 +1,6 @@
 // server/services/ChatService.js
 const ChatSession = require('../models/ChatSession');
+const File = require('../models/File');
 const { promises: fs } = require('fs');
 const path = require('path');
 const serviceManager = require('./serviceManager');

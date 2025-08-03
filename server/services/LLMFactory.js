@@ -1,7 +1,5 @@
 // server/services/LLMFactory.js
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { getModel } = require('./LLMFactory');
-const { HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 
 const DEFAULT_MODEL = 'gemini-1.5-flash';
 

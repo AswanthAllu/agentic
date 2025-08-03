@@ -4,6 +4,8 @@ const router = express.Router();
 const fs = require('fs').promises;
 const { tempAuth } = require('../middleware/authMiddleware');
 const File = require('../models/File');
+const User = require('../models/User');
+const UserMultiLLMManager = require('../services/UserMultiLLMManager');
 const serviceManager = require('../services/serviceManager');
 const MindMapGenerator = require('../services/MindMapGenerator');
 const DocumentProcessor = require('../services/documentProcessor');
@@ -22,6 +24,20 @@ router.post('/generate', tempAuth, async (req, res) => {
 
     try {
         logger.log('mindmap_generation_requested', { userId, fileId });
+        
+        // Get user and check for API key
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        if (!user.geminiApiKey) {
+            return res.status(400).json({ 
+                message: 'Please set your Gemini API key in settings to use AI features.',
+                requiresApiKey: true
+            });
+        }
+
         const file = await File.findOne({ _id: fileId, user: userId });
         const fsPath = file?.path;
         let fileExists = false;
@@ -37,7 +53,7 @@ router.post('/generate', tempAuth, async (req, res) => {
             return res.status(404).json({ message: 'File not found on server. Please re-upload.' });
         }
 
-        const { documentProcessor, multiLLMManager } = serviceManager.getServices();
+        const { documentProcessor } = serviceManager.getServices();
         const fileContent = await documentProcessor.parseFile(file.path, file.mimetype);
         
         if (!fileContent || fileContent.trim().length === 0) {
@@ -46,9 +62,18 @@ router.post('/generate', tempAuth, async (req, res) => {
 
         let mindMapData = null;
         try {
-            mindMapData = await multiLLMManager.generateMindMapData(fileContent, file.originalname);
+            // Use user-specific AI service
+            const userLLMManager = new UserMultiLLMManager(user.geminiApiKey);
+            mindMapData = await userLLMManager.generateMindMapData(fileContent, file.originalname);
         } catch (aiError) {
             logger.warn('mindmap_ai_fallback', { userId, fileId, error: aiError.message });
+            
+            if (aiError.message.includes('API key')) {
+                return res.status(400).json({ 
+                    message: 'Invalid Gemini API key. Please check your API key in settings.',
+                    requiresApiKey: true
+                });
+            }
         }
 
         if (!mindMapData || !mindMapData.nodes || mindMapData.nodes.length === 0) {

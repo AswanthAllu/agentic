@@ -362,9 +362,15 @@ const ChatPage = ({ setIsAuthenticated }) => {
             }
         } catch (err) {
             let errorMessageText = err.response?.data?.message || err.message || 'Failed to generate podcast.';
-            if (errorMessageText.includes('Not enough content in file')) {
+            
+            if (err.response?.data?.requiresApiKey || errorMessageText.includes('API key')) {
+                errorMessageText = 'Please set your Gemini API key in Settings to use AI features.';
+                setSidebarView('settings'); // Open settings sidebar
+                setIsSidebarExpanded(true);
+            } else if (errorMessageText.includes('Not enough content in file')) {
                 errorMessageText = 'The selected file does not have enough content to generate a podcast. Please upload a longer or more detailed file.';
             }
+            
             setError(`Podcast Error: ${errorMessageText}`);
             setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Podcast Error: ${errorMessageText}` }], timestamp: new Date() }]);
         } finally {
@@ -391,7 +397,14 @@ const ChatPage = ({ setIsAuthenticated }) => {
                 throw new Error('Invalid mind map data received from server');
             }
         } catch (err) {
-            const errorMessageText = err.response?.data?.message || err.message || 'Failed to generate mind map.';
+            let errorMessageText = err.response?.data?.message || err.message || 'Failed to generate mind map.';
+            
+            if (err.response?.data?.requiresApiKey || errorMessageText.includes('API key')) {
+                errorMessageText = 'Please set your Gemini API key in Settings to use AI features.';
+                setSidebarView('settings'); // Open settings sidebar
+                setIsSidebarExpanded(true);
+            }
+            
             setError(`Mind Map Error: ${errorMessageText}`);
             setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Mind Map Error: ${errorMessageText}` }], timestamp: new Date() }]);
         } finally {
@@ -439,7 +452,14 @@ const ChatPage = ({ setIsAuthenticated }) => {
             };
             setMessages(prev => [...prev, reportMessage]);
         } catch (err) {
-            const errorMessageText = err.response?.data?.message || err.message || 'Failed to generate report.';
+            let errorMessageText = err.response?.data?.message || err.message || 'Failed to generate report.';
+            
+            if (err.response?.data?.requiresApiKey || errorMessageText.includes('API key')) {
+                errorMessageText = 'Please set your Gemini API key in Settings to use AI features.';
+                setSidebarView('settings'); // Open settings sidebar
+                setIsSidebarExpanded(true);
+            }
+            
             setError(`Report Generation Error: ${errorMessageText}`);
             setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Report Generation Error: ${errorMessageText}` }], timestamp: new Date() }]);
         } finally {
@@ -461,7 +481,14 @@ const ChatPage = ({ setIsAuthenticated }) => {
             };
             setMessages(prev => [...prev, presentationMessage]);
         } catch (err) {
-            const errorMessageText = err.response?.data?.message || err.message || 'Failed to generate presentation.';
+            let errorMessageText = err.response?.data?.message || err.message || 'Failed to generate presentation.';
+            
+            if (err.response?.data?.requiresApiKey || errorMessageText.includes('API key')) {
+                errorMessageText = 'Please set your Gemini API key in Settings to use AI features.';
+                setSidebarView('settings'); // Open settings sidebar
+                setIsSidebarExpanded(true);
+            }
+            
             setError(`Presentation Generation Error: ${errorMessageText}`);
             setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Presentation Generation Error: ${errorMessageText}` }], timestamp: new Date() }]);
         } finally {

@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
+    geminiApiKey: { type: String, default: null }, // User's personal Gemini API key
     createdAt: { type: Date, default: Date.now }
 });
 

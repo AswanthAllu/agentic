@@ -2,6 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const { tempAuth } = require('../middleware/authMiddleware');
+const User = require('../models/User');
+const UserMultiLLMManager = require('../services/UserMultiLLMManager');
 const serviceManager = require('../services/serviceManager');
 const File = require('../models/File');
 const fs = require('fs'); // Import the standard fs module for synchronous checks
@@ -18,7 +20,20 @@ router.post('/generate', tempAuth, async (req, res) => {
 
     logger.log('report_generation_requested', { userId, fileId, query });
     try {
-        const { documentProcessor, multiLLMManager } = serviceManager.getServices();
+        // Get user and check for API key
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        if (!user.geminiApiKey) {
+            return res.status(400).json({ 
+                message: 'Please set your Gemini API key in settings to use AI features.',
+                requiresApiKey: true
+            });
+        }
+
+        const { documentProcessor } = serviceManager.getServices();
         let sourceContent = '';
         let file = null; // Declare file here so it's always accessible
 
@@ -38,7 +53,9 @@ router.post('/generate', tempAuth, async (req, res) => {
             return res.status(400).json({ message: 'Insufficient content to generate a report.' });
         }
 
-        const reportData = await multiLLMManager.generateReport(sourceContent, fileId ? file.originalname : 'User Query');
+        // Use user-specific AI service
+        const userLLMManager = new UserMultiLLMManager(user.geminiApiKey);
+        const reportData = await userLLMManager.generateReport(sourceContent, fileId ? file.originalname : 'User Query');
         
         logger.log('report_generation_success', { userId, fileId, query });
         res.json({
@@ -47,6 +64,14 @@ router.post('/generate', tempAuth, async (req, res) => {
         });
     } catch (error) {
         logger.error('report_generation_failed', { userId, fileId, query, error: error.message });
+        
+        if (error.message.includes('API key')) {
+            return res.status(400).json({ 
+                message: 'Invalid Gemini API key. Please check your API key in settings.',
+                requiresApiKey: true
+            });
+        }
+        
         res.status(500).json({ message: 'Failed to generate report.', error: error.message });
     }
 });

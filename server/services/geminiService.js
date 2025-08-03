@@ -107,20 +107,61 @@ class GeminiService {
     }
 
     async generateChatResponse(message, documentChunks = [], chatHistory = [], systemPrompt = '') {
-        if (!this.genAI) return "The AI service is currently unavailable. Please try again later.";
+        if (!this.genAI) {
+            console.warn("Gemini AI service not initialized");
+            throw new Error("Gemini AI service is not available. Please check your API key configuration.");
+        }
+        
         try {
-            let fullSystemPrompt = systemPrompt || "You are a helpful AI assistant.";
+            // Build comprehensive system prompt
+            let fullSystemPrompt = systemPrompt || "You are TutorAI, an intelligent educational assistant. Provide helpful, accurate, and engaging responses to help users learn.";
+            
+            // Add document context if available
             if (documentChunks && documentChunks.length > 0) {
-                const context = documentChunks.map(chunk => chunk.pageContent).join('\n\n');
-                fullSystemPrompt += `\n\n## Context from Documents:\n${context}`;
+                const context = documentChunks.map(chunk => chunk.pageContent || chunk.content).join('\n\n');
+                fullSystemPrompt += `\n\n## Context from Documents:\n${context}\n\nPlease use this context to provide accurate and relevant responses.`;
             }
+            
+            // Configure model with system prompt
             const model = this._configureModel(fullSystemPrompt.trim());
-            const chat = model.startChat({ history: chatHistory });
+            
+            // Prepare chat history in correct format
+            const formattedHistory = chatHistory.map(msg => ({
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: msg.parts?.[0]?.text || msg.content || msg.text || '' }]
+            })).filter(msg => msg.parts[0].text.trim().length > 0);
+            
+            // Start chat with history
+            const chat = model.startChat({ 
+                history: formattedHistory,
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 2048,
+                    topP: 0.8,
+                    topK: 40
+                }
+            });
+            
+            // Send message and get response
             const result = await chat.sendMessage(message);
-            return this._processApiResponse(result.response);
+            const response = this._processApiResponse(result.response);
+            
+            console.log("Gemini response generated successfully, length:", response.length);
+            return response;
+            
         } catch (error) {
             console.error("Error in generateChatResponse:", error);
-            throw handleGeminiError(error);
+            
+            // Handle specific error types
+            if (error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key not valid')) {
+                throw new Error("Invalid Gemini API Key. Please check your configuration.");
+            } else if (error.message?.includes('RATE_LIMIT_EXCEEDED')) {
+                throw new Error("Rate limit exceeded. Please try again in a moment.");
+            } else if (error.message?.includes('SAFETY')) {
+                throw new Error("Response was blocked by safety filters. Please rephrase your question.");
+            }
+            
+            throw new Error(`Gemini API Error: ${error.message}`);
         }
     }
 

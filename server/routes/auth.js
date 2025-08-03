@@ -4,6 +4,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { tempAuth } = require('../middleware/authMiddleware');
 
 router.post('/signup', async (req, res) => {
     const { username, password } = req.body;
@@ -99,6 +100,75 @@ router.post('/signin', async (req, res) => {
     } catch (err) {
         logger.error('signin_failed', { error: err.message, username });
         res.status(500).send('Server error');
+    }
+});
+
+// Set user's Gemini API key
+router.post('/set-api-key', tempAuth, async (req, res) => {
+    const { geminiApiKey } = req.body;
+    const userId = req.user.id;
+    const logger = req.logger;
+
+    if (!geminiApiKey || geminiApiKey.trim() === '') {
+        return res.status(400).json({ message: 'Gemini API key is required.' });
+    }
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        user.geminiApiKey = geminiApiKey.trim();
+        await user.save();
+
+        logger.log('user_api_key_updated', { userId });
+        res.json({ message: 'Gemini API key updated successfully.' });
+    } catch (error) {
+        logger.error('api_key_update_failed', { userId, error: error.message });
+        res.status(500).json({ message: 'Failed to update API key.' });
+    }
+});
+
+// Get user's API key status (without exposing the actual key)
+router.get('/api-key-status', tempAuth, async (req, res) => {
+    const userId = req.user.id;
+
+    try {
+        const user = await User.findById(userId).select('geminiApiKey');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        const hasApiKey = !!(user.geminiApiKey && user.geminiApiKey.trim() !== '');
+        res.json({ 
+            hasApiKey,
+            keyPreview: hasApiKey ? `${user.geminiApiKey.substring(0, 8)}...` : null
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to check API key status.' });
+    }
+});
+
+// Remove user's API key
+router.delete('/api-key', tempAuth, async (req, res) => {
+    const userId = req.user.id;
+    const logger = req.logger;
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        user.geminiApiKey = null;
+        await user.save();
+
+        logger.log('user_api_key_removed', { userId });
+        res.json({ message: 'Gemini API key removed successfully.' });
+    } catch (error) {
+        logger.error('api_key_removal_failed', { userId, error: error.message });
+        res.status(500).json({ message: 'Failed to remove API key.' });
     }
 });
 

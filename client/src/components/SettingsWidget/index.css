@@ -1,8 +1,17 @@
 /* client/src/components/SettingsWidget/index.css */
+.settings-widget {
+    padding: 20px;
+    background: white;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
 .settings-widget h3 {
     margin: 0 0 16px 0;
-    font-size: 1.1rem;
-    font-weight: 500;
+    font-size: 1.2rem;
+    font-weight: 600;
     color: var(--primary-text-color);
     flex-shrink: 0;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
 }

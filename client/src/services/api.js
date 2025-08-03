@@ -66,3 +66,8 @@ export const generatePodcast = (fileId) => api.post('/podcast/generate', { fileI
 export const generateMindMap = (fileId) => api.post('/mindmap/generate', { fileId });
 export const generateReport = (fileId, query) => api.post('/reports/generate', { fileId, query });
 export const generatePresentation = (fileId, query) => api.post('/presentations/generate', { fileId, query });
+
+// API Key Management
+export const setGeminiApiKey = (geminiApiKey) => api.post('/auth/set-api-key', { geminiApiKey });
+export const getApiKeyStatus = () => api.get('/auth/api-key-status');
+export const removeGeminiApiKey = () => api.delete('/auth/api-key');

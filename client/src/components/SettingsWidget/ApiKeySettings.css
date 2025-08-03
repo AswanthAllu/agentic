@@ -1,0 +1,236 @@
+/* client/src/components/SettingsWidget/ApiKeySettings.css */
+.api-key-settings {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    margin: 16px 0;
+    border: 1px solid #e9ecef;
+}
+
+.api-key-settings h3 {
+    margin: 0 0 8px 0;
+    color: #2d3748;
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.description {
+    color: #6b7280;
+    margin-bottom: 20px;
+    line-height: 1.5;
+    font-size: 14px;
+}
+
+.current-key-info {
+    background: #e6fffa;
+    border: 1px solid #81e6d9;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.key-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #065f46;
+    font-weight: 500;
+}
+
+.status-indicator.active {
+    color: #059669;
+    font-weight: bold;
+}
+
+.remove-key-btn {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.remove-key-btn:hover:not(:disabled) {
+    background: #b91c1c;
+}
+
+.remove-key-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.api-key-form {
+    margin-bottom: 20px;
+}
+
+.input-group {
+    margin-bottom: 16px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #374151;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.api-key-input {
+    flex: 1;
+    padding: 12px 45px 12px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+}
+
+.api-key-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.api-key-input:disabled {
+    background: #f9fafb;
+    color: #6b7280;
+}
+
+.toggle-visibility {
+    position: absolute;
+    right: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.toggle-visibility:hover:not(:disabled) {
+    background: #f3f4f6;
+}
+
+.toggle-visibility:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.set-key-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.set-key-btn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.set-key-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}
+
+.message {
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.message.success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.message.error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+.help-section {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.help-section h4 {
+    margin: 0 0 12px 0;
+    color: #374151;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.help-section ol {
+    margin: 0 0 16px 0;
+    padding-left: 20px;
+    color: #4b5563;
+}
+
+.help-section li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+.help-section a {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.help-section a:hover {
+    text-decoration: underline;
+}
+
+.security-note {
+    margin: 0;
+    padding: 12px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    color: #1e40af;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 480px) {
+    .api-key-settings {
+        padding: 16px;
+    }
+    
+    .current-key-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .remove-key-btn {
+        align-self: stretch;
+    }
+}

@@ -1,3 +1,4 @@
+// server/routes/upload.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -6,25 +7,22 @@ const fs = require('fs');
 const { tempAuth } = require('../middleware/authMiddleware');
 const File = require('../models/File');
 const User = require('../models/User');
+const { SUPPORTED_MIMETYPES } = require('../utils/constants');
 
-// Configure multer to use memory storage. This is more flexible.
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit
+    limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-// @route   POST /api/upload
-// @desc    Upload a file, save metadata, and trigger RAG processing using the central serviceManager
-// @access  Private
 router.post('/', tempAuth, upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded.' });
     }
+    const logger = req.logger;
 
-    // Get the documentProcessor from the serviceManager injected into the request
     const { documentProcessor } = req.serviceManager.getServices();
     if (!documentProcessor) {
-        console.error("Upload Route: DocumentProcessor not available from serviceManager.");
+        logger.error("Upload Route: DocumentProcessor not available from serviceManager.");
         return res.status(500).json({ message: 'Server configuration error: DocumentProcessor is not available.' });
     }
 
@@ -32,6 +30,11 @@ router.post('/', tempAuth, upload.single('file'), async (req, res) => {
         const user = await User.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
+        }
+
+        if (!Object.values(SUPPORTED_MIMETYPES).includes(req.file.mimetype)) {
+            logger.warn('upload_unsupported_file_type', { userId: req.user.id, mimetype: req.file.mimetype });
+            return res.status(400).json({ message: 'Unsupported file type.' });
         }
 
         const newFile = new File({
@@ -53,24 +56,23 @@ router.post('/', tempAuth, upload.single('file'), async (req, res) => {
         newFile.path = finalPath;
         await newFile.save();
 
-        console.log(`✅ File upload successful for User '${user.username}'.`);
+        logger.log('file_upload_success', { userId: req.user.id, fileId: newFile._id, filename: newFile.originalname });
         
-        // Asynchronously process the document for RAG. We don't need to wait for this.
         documentProcessor.processFile(finalPath, {
             userId: req.user.id.toString(),
             fileId: newFile._id.toString(),
             originalName: req.file.originalname,
             fileType: path.extname(req.file.originalname).substring(1)
         }).then(result => {
-            console.log(`✅ RAG processing started for '${req.file.originalname}'.`);
+            logger.log('rag_processing_started', { userId: req.user.id, fileId: newFile._id });
         }).catch(ragError => {
-            console.error(`❌ RAG processing failed for '${req.file.originalname}':`, ragError.message);
+            logger.error('rag_processing_failed', { userId: req.user.id, fileId: newFile._id, error: ragError.message });
         });
 
         res.status(201).json(newFile);
 
     } catch (error) {
-        console.error('Error during file upload process:', error);
+        logger.error('file_upload_failed', { userId: req.user.id, error: error.message });
         res.status(500).json({ message: 'Server error during file upload.' });
     }
 });

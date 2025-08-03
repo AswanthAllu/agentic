@@ -2,11 +2,7 @@
 const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 const { handleGeminiError, handleRAGError } = require('../utils/errorUtils');
 
-// Using Gemini 2.0 Flash for higher rate limits:
-// - 200 requests per day (vs 50 for 1.5 Flash)
-// - 15 requests per minute
-// - 1,000,000 tokens per minute
-const MODEL_NAME = "gemini-2.0-flash";
+const MODEL_NAME = "gemini-1.5-flash"; // Default model
 
 const baseGenerationConfig = {
     temperature: 0.7,
@@ -21,7 +17,8 @@ const baseSafetySettings = [
 ];
 
 class GeminiService {
-    constructor() {
+    constructor(modelName = MODEL_NAME) {
+        this.modelName = modelName;
         this.genAI = null;
         this.model = null;
     }
@@ -29,20 +26,20 @@ class GeminiService {
     async initialize() {
         const API_KEY = process.env.GEMINI_API_KEY;
         if (!API_KEY) {
-            console.warn("⚠️ GEMINI_API_KEY not found. AI features will be disabled.");
+            console.warn(`⚠️ GEMINI_API_KEY not found. AI features for model ${this.modelName} will be disabled.`);
             return;
         }
 
         try {
             this.genAI = new GoogleGenerativeAI(API_KEY);
             this.model = this.genAI.getGenerativeModel({
-                model: MODEL_NAME,
+                model: this.modelName,
                 generationConfig: baseGenerationConfig,
                 safetySettings: baseSafetySettings
             });
-            console.log("🤖 Gemini AI service initialized successfully");
+            console.log(`🤖 Gemini AI service initialized for model: ${this.modelName}`);
         } catch (error) {
-            console.error("❌ Failed to initialize Gemini AI:", error.message);
+            console.error(`❌ Failed to initialize Gemini AI for model ${this.modelName}:`, error.message);
             this.genAI = null;
             this.model = null;
         }
@@ -50,7 +47,7 @@ class GeminiService {
 
     _validateAndPrepareHistory(chatHistory) {
         if (!Array.isArray(chatHistory) || chatHistory.length === 0) {
-             throw new Error("Chat history must be a non-empty array.");
+            throw new Error("Chat history must be a non-empty array.");
         }
         if (chatHistory[chatHistory.length - 1].role !== 'user') {
             throw new Error("Internal error: Invalid chat history sequence for API call.");
@@ -66,7 +63,7 @@ class GeminiService {
     _configureModel(systemPromptText) {
         if (!this.genAI) throw new Error("Cannot configure model, Gemini AI not initialized.");
         const modelOptions = {
-            model: MODEL_NAME,
+            model: this.modelName,
             generationConfig: baseGenerationConfig,
             safetySettings: baseSafetySettings,
         };
@@ -82,7 +79,7 @@ class GeminiService {
             const responseText = candidate.content?.parts?.[0]?.text;
             if (typeof responseText === 'string') return responseText;
         }
-             const finishReason = candidate?.finishReason || 'Unknown';
+        const finishReason = candidate?.finishReason || 'Unknown';
         const blockedCategories = candidate?.safetyRatings?.filter(r => r.blocked).map(r => r.category).join(', ');
         let blockMessage = `AI response generation failed. Reason: ${finishReason}.`;
         if (blockedCategories) blockMessage += ` Blocked Categories: ${blockedCategories}.`;
@@ -98,8 +95,8 @@ class GeminiService {
             const lastUserMessageText = chatHistory[chatHistory.length - 1].parts[0].text;
             const result = await chat.sendMessage(lastUserMessageText);
             return this._processApiResponse(result.response);
-    } catch (error) {
-        console.error("Gemini API Call Error:", error?.message || error);
+        } catch (error) {
+            console.error("Gemini API Call Error:", error?.message || error);
             const clientMessage = error.message.includes("API key not valid")
                 ? "AI Service Error: Invalid API Key."
                 : `AI Service Error: ${error.message}`;
@@ -114,10 +111,9 @@ class GeminiService {
         try {
             let fullSystemPrompt = systemPrompt || "You are a helpful AI assistant.";
             if (documentChunks && documentChunks.length > 0) {
-                const context = documentChunks.map(chunk => chunk.pageContent).join('\\n\\n');
-                fullSystemPrompt += `\\n\\n## Context from Documents:\\n${context}`;
+                const context = documentChunks.map(chunk => chunk.pageContent).join('\n\n');
+                fullSystemPrompt += `\n\n## Context from Documents:\n${context}`;
             }
-
             const model = this._configureModel(fullSystemPrompt.trim());
             const chat = model.startChat({ history: chatHistory });
             const result = await chat.sendMessage(message);
@@ -130,15 +126,10 @@ class GeminiService {
 
     async synthesizeResults(results, query, decomposition) {
         if (!this.genAI || !this.model) {
-            return {
-                summary: `I'm sorry, but the AI service is unavailable. I found ${results.length} results for your query: "${query}".`,
-                sources: results.map(r => r.metadata?.source || r.source || 'Unknown'),
-                aiGenerated: false,
-                fallback: true
-            };
+            return { summary: `I'm sorry, but the AI service is unavailable.`, sources: [], aiGenerated: false, fallback: true };
         }
         try {
-            const context = results.map(result => `Source: ${result.metadata.source}\nSnippet: ${result.metadata.snippet}`).join('\n\n');
+            const context = results.map(result => `Source: ${result.metadata?.source || 'Unknown'}\nSnippet: ${result.metadata?.snippet || 'No snippet'}`).join('\n\n');
             const prompt = `Based on the following search results, provide a concise answer to the query: "${query}".\n\nContext:\n${context}`;
             const result = await this.model.generateContent(prompt);
             const text = this._processApiResponse(result.response);

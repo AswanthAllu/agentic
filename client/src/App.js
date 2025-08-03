@@ -1,10 +1,9 @@
-// client/src/App.js
+// src/App.js
 import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CircularProgress, CssBaseline } from '@mui/material';
 import { getCurrentUser } from './services/api';
 
-// Lazy load components to reduce initial bundle size
 const AuthPage = React.lazy(() => import('./components/AuthPage'));
 const ChatPage = React.lazy(() => import('./components/ChatPage'));
 const LandingPage = React.lazy(() => import('./components/LandingPage'));
@@ -13,11 +12,11 @@ const darkTheme = createTheme({
     palette: {
         mode: 'dark',
         background: {
-            default: '#131314', // Main background from your CSS
-            paper: '#1e1f20',   // Surface color from your CSS
+            default: '#131314',
+            paper: '#1e1f20',
         },
         primary: {
-            main: '#8ab4f8', // A common Google blue
+            main: '#8ab4f8',
         },
         text: {
             primary: '#e3e3e3',
@@ -44,17 +43,10 @@ const darkTheme = createTheme({
 });
 
 const LoadingFallback = () => (
-    <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        backgroundColor: '#131314'
-    }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#131314' }}>
         <CircularProgress />
     </div>
 );
-
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -90,30 +82,18 @@ function App() {
 
     return (
         <ThemeProvider theme={darkTheme}>
-            <CssBaseline /> {/* Ensures MUI uses the theme's background color */}
+            <CssBaseline />
             <Router>
                 <Suspense fallback={<LoadingFallback />}>
                     <Routes>
                         <Route path="/" element={<LandingPage />} />
                         <Route
                             path="/login"
-                            element={
-                                !isAuthenticated ? (
-                                    <AuthPage setIsAuthenticated={setIsAuthenticated} />
-                                ) : (
-                                    <Navigate to="/chat" replace />
-                                )
-                            }
+                            element={!isAuthenticated ? (<AuthPage setIsAuthenticated={setIsAuthenticated} />) : (<Navigate to="/chat" replace />)}
                         />
                         <Route
                             path="/chat"
-                            element={
-                                isAuthenticated ? (
-                                    <ChatPage setIsAuthenticated={setIsAuthenticated} />
-                                ) : (
-                                    <Navigate to="/login" replace />
-                                )
-                            }
+                            element={isAuthenticated ? (<ChatPage setIsAuthenticated={setIsAuthenticated} />) : (<Navigate to="/login" replace />)}
                         />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

@@ -4,20 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import {
     sendMessage as apiSendMessage, saveChatHistory, generatePodcast, generateMindMap,
     getUserFiles, deleteUserFile, renameUserFile, performDeepSearch,
-    queryHybridRagService, getSessionDetails
+    queryHybridRagService, getSessionDetails, querySyllabus, generateReport, generatePresentation,
+    queryAgentic
 } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
-import { FaBars, FaPaperPlane, FaMicrophone, FaHistory, FaPlus, FaCog, FaFolderOpen, FaSignOutAlt } from 'react-icons/fa';
-import { Popover, Typography, Button, Box, IconButton as MuiIconButton } from '@mui/material';
+import { FaBars, FaPaperPlane, FaMicrophone, FaHistory, FaPlus, FaCog, FaFolderOpen, FaSignOutAlt, FaTasks, FaFileWord, FaFilePowerpoint } from 'react-icons/fa';
+import { Popover, Typography, Button, Box, IconButton as MuiIconButton, Chip } from '@mui/material';
 
 import FileUploadWidget from './FileUploadWidget';
 import FileManagerWidget from './FileManagerWidget';
 import HistorySidebarWidget from './HistorySidebarWidget';
 import SettingsWidget from './SettingsWidget';
 import MindMap from './MindMap';
+import SyllabusWidget from './SyllabusWidget';
 import { getPromptTextById, availablePrompts } from '../utils/prompts';
+import { ChatMode, getChatModeDisplayName } from '../utils/constants';
 
 import './ChatPage.css';
 
@@ -39,7 +42,7 @@ const ChatPage = ({ setIsAuthenticated }) => {
     const [sidebarView, setSidebarView] = useState('files');
     const [profileAnchorEl, setProfileAnchorEl] = useState(null);
     const [loadingStates, setLoadingStates] = useState({
-        chat: false, files: false, podcast: false, mindMap: false, deepSearch: false, listening: false
+        chat: false, files: false, podcast: false, mindMap: false, deepSearch: false, listening: false, report: false, presentation: false, syllabus: false
     });
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
@@ -51,11 +54,10 @@ const ChatPage = ({ setIsAuthenticated }) => {
     const [editableSystemPromptText, setEditableSystemPromptText] = useState(() => getPromptTextById('friendly'));
     const [files, setFiles] = useState([]);
     const [fileError, setFileError] = useState('');
-    const [isRagEnabled, setIsRagEnabled] = useState(false);
-    const [allowRagDeepSearch, setAllowRagDeepSearch] = useState(true);
-    const [isDeepSearchEnabled, setIsDeepSearchEnabled] = useState(false);
     const [activeFileForRag, setActiveFileForRag] = useState(null);
     const [currentlySpeakingIndex, setCurrentlySpeakingIndex] = useState(null);
+    const [chatMode, setChatMode] = useState(ChatMode.Standard);
+    const [activeSyllabusId, setActiveSyllabusId] = useState(null);
 
     const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
@@ -65,7 +67,6 @@ const ChatPage = ({ setIsAuthenticated }) => {
     const handleProfileClose = () => setProfileAnchorEl(null);
     const isProfileOpen = Boolean(profileAnchorEl);
 
-    // New handler to close sidebar on mobile after an action
     const handleSidebarAction = () => {
         if (window.innerWidth < 1024) {
             setIsSidebarExpanded(false);
@@ -126,7 +127,6 @@ const ChatPage = ({ setIsAuthenticated }) => {
             setSessionId(newSessionId);
             localStorage.setItem('sessionId', newSessionId);
         }
-
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             const recognition = new SpeechRecognition();
@@ -168,7 +168,10 @@ const ChatPage = ({ setIsAuthenticated }) => {
     const handleNewChat = useCallback(() => {
         if (!isProcessing) {
             saveAndReset(false, () => {
-                setSidebarView('files'); 
+                setSidebarView('files');
+                setChatMode(ChatMode.Standard);
+                setActiveFileForRag(null);
+                setActiveSyllabusId(null);
             });
         }
     }, [isProcessing, saveAndReset]);
@@ -183,63 +186,68 @@ const ChatPage = ({ setIsAuthenticated }) => {
         setMessages(prev => [...prev, newUserMessage]);
         setInputText('');
         setError('');
-
         const historyToSend = [...messages, newUserMessage];
-        
-        if (isDeepSearchEnabled) {
-            setLoadingStates(prev => ({ ...prev, deepSearch: true }));
-            try {
-                const response = await performDeepSearch(trimmedInput);
-                const deepSearchResult = {
-                    role: 'assistant', type: 'deep_search',
-                    parts: [{ text: response.data.message }],
-                    timestamp: new Date(), metadata: response.data.metadata
-                };
-                setMessages(prev => [...prev, deepSearchResult]);
-            } catch (err) {
-                setError(`Deep Search Error: ${err.response?.data?.message || 'Deep search failed.'}`);
-                setMessages(prev => prev.slice(0, -1));
-            } finally {
-                setLoadingStates(prev => ({ ...prev, deepSearch: false }));
+
+        let response;
+        try {
+            switch (chatMode) {
+                case ChatMode.DeepSearch:
+                    setLoadingStates(prev => ({ ...prev, deepSearch: true }));
+                    response = await performDeepSearch(trimmedInput);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant', type: 'deep_search', parts: [{ text: response.data.message }],
+                        timestamp: new Date(), metadata: response.data.metadata
+                    }]);
+                    break;
+                case ChatMode.Agentic:
+                    setLoadingStates(prev => ({ ...prev, agentic: true }));
+                    response = await queryAgentic(trimmedInput);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant', type: 'agentic', parts: [{ text: response.data.message }],
+                        timestamp: new Date(), metadata: response.data.metadata
+                    }]);
+                    break;
+                case ChatMode.RAG:
+                    setLoadingStates(prev => ({ ...prev, chat: true }));
+                    response = await queryHybridRagService({ query: trimmedInput, fileId: activeFileForRag?.id });
+                    setMessages(prev => [...prev, {
+                        role: 'assistant', type: response.data.metadata.searchType, parts: [{ text: response.data.message }],
+                        timestamp: new Date(), metadata: response.data.metadata
+                    }]);
+                    break;
+                case ChatMode.SyllabusChat:
+                    setLoadingStates(prev => ({ ...prev, chat: true }));
+                    response = await querySyllabus(activeSyllabusId, trimmedInput);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant', type: 'syllabus_chat', parts: [{ text: response.data.message }],
+                        timestamp: new Date(), metadata: { source: response.data.source }
+                    }]);
+                    break;
+                default:
+                    setLoadingStates(prev => ({ ...prev, chat: true }));
+                    const payload = { query: trimmedInput, history: historyToSend, sessionId, systemPrompt: editableSystemPromptText };
+                    response = await apiSendMessage(payload);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant', parts: [{ text: response.data.message }], timestamp: new Date()
+                    }]);
+                    break;
             }
-        } else if (isRagEnabled) {
-            setLoadingStates(prev => ({ ...prev, chat: true }));
-            try {
-                const ragPayload = {
-                    query: trimmedInput, fileId: activeFileForRag?.id, allowDeepSearch: allowRagDeepSearch
-                };
-                const response = await queryHybridRagService(ragPayload);
-                const assistantMessage = {
-                    role: 'assistant', type: response.data.metadata.searchType,
-                    parts: [{ text: response.data.message }],
-                    timestamp: new Date(), metadata: response.data.metadata
-                };
-                setMessages(prev => [...prev, assistantMessage]);
-            } catch (err) {
-                setError(`RAG Error: ${err.response?.data?.message || 'RAG query failed.'}`);
-                setMessages(prev => prev.slice(0, -1));
-            } finally {
-                setLoadingStates(prev => ({ ...prev, chat: false }));
-            }
-        } else {
-            setLoadingStates(prev => ({ ...prev, chat: true }));
-            try {
-                const payload = { query: trimmedInput, history: historyToSend, sessionId, systemPrompt: editableSystemPromptText };
-                const response = await apiSendMessage(payload);
-                const assistantMessage = {
-                    role: 'assistant', parts: [{ text: response.data.message }], timestamp: new Date()
-                };
-                setMessages(prev => [...prev, assistantMessage]);
-            } catch (err) {
-                setError(err.response?.data?.error || 'Chat error.');
-                setMessages(prev => prev.slice(0, -1));
-            } finally {
-                setLoadingStates(prev => ({ ...prev, chat: false }));
-            }
+        } catch (err) {
+            const errorMessage = err.response?.data?.message || err.message || 'An unexpected error occurred.';
+            setError(`${getChatModeDisplayName(chatMode)} Error: ${errorMessage}`);
+            setMessages(prev => prev.slice(0, -1));
+        } finally {
+            setLoadingStates(prev => {
+                const newStates = { ...prev };
+                if (chatMode === ChatMode.DeepSearch) newStates.deepSearch = false;
+                else if (chatMode === ChatMode.Agentic) newStates.agentic = false;
+                else newStates.chat = false;
+                return newStates;
+            });
         }
     }, [
-        inputText, isProcessing, loadingStates.listening, messages, isDeepSearchEnabled,
-        isRagEnabled, allowRagDeepSearch, sessionId, editableSystemPromptText, activeFileForRag
+        inputText, isProcessing, loadingStates.listening, messages, chatMode,
+        activeFileForRag, activeSyllabusId, sessionId, editableSystemPromptText
     ]);
     
     const handleEnterKey = useCallback((e) => {
@@ -269,7 +277,7 @@ const ChatPage = ({ setIsAuthenticated }) => {
                 setSessionId(sessionData.sessionId);
                 localStorage.setItem('sessionId', sessionData.sessionId);
                 setSidebarView('files');
-                handleSidebarAction(); // Close sidebar on mobile after loading
+                handleSidebarAction();
             }
         } catch (err) {
             setError(`Failed to load session ${sessionIdToLoad}.`);
@@ -321,13 +329,17 @@ const ChatPage = ({ setIsAuthenticated }) => {
     
     const handleChatWithFile = useCallback((fileId, fileName) => {
         setActiveFileForRag({ id: fileId, name: fileName });
-        setIsRagEnabled(true);
-        setIsDeepSearchEnabled(false);
-        setMessages(prev => [...prev, {
-            role: 'system',
-            parts: [{ text: `Now chatting with file: **${fileName}**` }],
-            timestamp: new Date()
-        }]);
+        setChatMode(ChatMode.RAG);
+        setActiveSyllabusId(null);
+        setMessages(prev => [...prev, { role: 'system', parts: [{ text: `Now chatting with file: **${fileName}**` }], timestamp: new Date() }]);
+    }, []);
+
+    const handleChatWithSyllabus = useCallback((subjectId, subjectName) => {
+        setActiveSyllabusId(subjectId);
+        setChatMode(ChatMode.SyllabusChat);
+        setActiveFileForRag(null);
+        setMessages(prev => [...prev, { role: 'system', parts: [{ text: `Now chatting about the syllabus for: **${subjectName}**` }], timestamp: new Date() }]);
+        handleSidebarAction();
     }, []);
 
     const handleGeneratePodcast = useCallback(async (fileId, fileName) => {
@@ -354,9 +366,10 @@ const ChatPage = ({ setIsAuthenticated }) => {
                 errorMessageText = 'The selected file does not have enough content to generate a podcast. Please upload a longer or more detailed file.';
             }
             setError(`Podcast Error: ${errorMessageText}`);
-            setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `Error generating podcast: ${errorMessageText}` }], timestamp: new Date() }]);
+            setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Podcast Error: ${errorMessageText}` }], timestamp: new Date() }]);
+        } finally {
+            setLoadingStates(prev => ({ ...prev, podcast: false }));
         }
-        setLoadingStates(prev => ({ ...prev, podcast: false }));
     }, [isProcessing]);
     
     const handleGenerateMindMap = useCallback(async (fileId, fileName) => {
@@ -397,14 +410,70 @@ const ChatPage = ({ setIsAuthenticated }) => {
         setCurrentSystemPromptId(matchingPreset ? matchingPreset.id : 'custom');
     }, []);
 
-    if (!userId) {
-        return <div className="loading-indicator"><span>Initializing...</span></div>;
-    }
+    const renderChatModeInfo = () => {
+        switch (chatMode) {
+            case ChatMode.RAG:
+                return <Chip label={`RAG Mode: ${activeFileForRag?.name}`} onDelete={() => setChatMode(ChatMode.Standard)} color="primary" />;
+            case ChatMode.DeepSearch:
+                return <Chip label="Deep Search Mode" onDelete={() => setChatMode(ChatMode.Standard)} color="secondary" />;
+            case ChatMode.Agentic:
+                return <Chip label="Agentic Mode" onDelete={() => setChatMode(ChatMode.Standard)} color="info" />;
+            case ChatMode.SyllabusChat:
+                return <Chip label={`Syllabus Chat: ${activeSyllabusId}`} onDelete={() => setChatMode(ChatMode.Standard)} color="success" />;
+            default:
+                return null;
+        }
+    };
+
+    const handleGenerateReport = useCallback(async (fileId, query = null) => {
+        if (isProcessing) return;
+        setLoadingStates(prev => ({ ...prev, report: true }));
+        setError('');
+        setMessages(prev => [...prev, { role: 'user', parts: [{ text: `Requesting a report for: ${fileId ? `file "${files.find(f => f._id === fileId)?.originalname}"` : `query "${query}"`}` }], timestamp: new Date() }]);
+        try {
+            const response = await generateReport(fileId, query);
+            const reportMessage = {
+                role: 'assistant', type: 'report',
+                parts: [{ text: response.data.report }],
+                timestamp: new Date(), metadata: { source: fileId ? 'document' : 'query' }
+            };
+            setMessages(prev => [...prev, reportMessage]);
+        } catch (err) {
+            const errorMessageText = err.response?.data?.message || err.message || 'Failed to generate report.';
+            setError(`Report Generation Error: ${errorMessageText}`);
+            setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Report Generation Error: ${errorMessageText}` }], timestamp: new Date() }]);
+        } finally {
+            setLoadingStates(prev => ({ ...prev, report: false }));
+        }
+    }, [isProcessing, files]);
+
+    const handleGeneratePresentation = useCallback(async (fileId, query = null) => {
+        if (isProcessing) return;
+        setLoadingStates(prev => ({ ...prev, presentation: true }));
+        setError('');
+        setMessages(prev => [...prev, { role: 'user', parts: [{ text: `Requesting a presentation for: ${fileId ? `file "${files.find(f => f._id === fileId)?.originalname}"` : `query "${query}"`}` }], timestamp: new Date() }]);
+        try {
+            const response = await generatePresentation(fileId, query);
+            const presentationMessage = {
+                role: 'assistant', type: 'presentation',
+                parts: [{ text: response.data.presentation }],
+                timestamp: new Date(), metadata: { source: fileId ? 'document' : 'query' }
+            };
+            setMessages(prev => [...prev, presentationMessage]);
+        } catch (err) {
+            const errorMessageText = err.response?.data?.message || err.message || 'Failed to generate presentation.';
+            setError(`Presentation Generation Error: ${errorMessageText}`);
+            setMessages(prev => [...prev, { role: 'assistant', parts: [{ text: `❌ Presentation Generation Error: ${errorMessageText}` }], timestamp: new Date() }]);
+        } finally {
+            setLoadingStates(prev => ({ ...prev, presentation: false }));
+        }
+    }, [isProcessing, files]);
+
+    if (!userId) { return <div className="loading-indicator"><span>Initializing...</span></div>; }
     
     return (
         <div className="chat-page-container">
             {isSidebarExpanded && <div className="drawer-overlay" onClick={() => setIsSidebarExpanded(false)} />}
-            
             <div className={`sidebar-area ${isSidebarExpanded ? 'expanded' : 'collapsed'}`}>
                 <div className="sidebar-icons">
                     <div className="sidebar-icons-top">
@@ -412,104 +481,69 @@ const ChatPage = ({ setIsAuthenticated }) => {
                         <button onClick={handleNewChat} className="icon-button" disabled={isProcessing} title="New Chat"> <FaPlus /> </button>
                         <button onClick={() => setSidebarView('history')} className={`icon-button ${sidebarView === 'history' ? 'active' : ''}`} disabled={isProcessing} title="Chat History"> <FaHistory /> </button>
                         <button onClick={() => setSidebarView('files')} className={`icon-button ${sidebarView === 'files' ? 'active' : ''}`} title="My Files"> <FaFolderOpen /> </button>
+                        <button onClick={() => setSidebarView('syllabus')} className={`icon-button ${sidebarView === 'syllabus' ? 'active' : ''}`} title="Syllabus Chat"> <FaFileWord /> </button>
                     </div>
                     <div className="sidebar-icons-bottom">
-                         <button onClick={() => setSidebarView('settings')} className={`icon-button ${sidebarView === 'settings' ? 'active' : ''}`} title="Settings"> <FaCog /> </button>
+                        <button onClick={() => setSidebarView('settings')} className={`icon-button ${sidebarView === 'settings' ? 'active' : ''}`} title="Settings"> <FaCog /> </button>
                     </div>
                 </div>
                 <div className="sidebar-content">
                     <div className="mobile-sidebar-nav">
-                        <button onClick={() => { handleNewChat(); setIsSidebarExpanded(false); }} className="mobile-nav-button" disabled={isProcessing}>
-                            <FaPlus /> New Chat
-                        </button>
-                        <button onClick={() => setSidebarView('history')} className={`mobile-nav-button ${sidebarView === 'history' ? 'active' : ''}`} disabled={isProcessing}>
-                            <FaHistory /> Chat History
-                        </button>
-                        <button onClick={() => setSidebarView('files')} className={`mobile-nav-button ${sidebarView === 'files' ? 'active' : ''}`}>
-                            <FaFolderOpen /> My Files
-                        </button>
-                        <button onClick={() => setSidebarView('settings')} className={`mobile-nav-button ${sidebarView === 'settings' ? 'active' : ''}`}>
-                            <FaCog /> Settings
-                        </button>
+                        <button onClick={() => { handleNewChat(); setIsSidebarExpanded(false); }} className="mobile-nav-button" disabled={isProcessing}> <FaPlus /> New Chat </button>
+                        <button onClick={() => setSidebarView('history')} className={`mobile-nav-button ${sidebarView === 'history' ? 'active' : ''}`} disabled={isProcessing}> <FaHistory /> Chat History </button>
+                        <button onClick={() => setSidebarView('files')} className={`mobile-nav-button ${sidebarView === 'files' ? 'active' : ''}`}> <FaFolderOpen /> My Files </button>
+                        <button onClick={() => setSidebarView('syllabus')} className={`mobile-nav-button ${sidebarView === 'syllabus' ? 'active' : ''}`}> <FaFileWord /> Syllabi </button>
+                        <button onClick={() => setSidebarView('settings')} className={`mobile-nav-button ${sidebarView === 'settings' ? 'active' : ''}`}> <FaCog /> Settings </button>
                     </div>
                     <div className="sidebar-divider" />
-
                     {sidebarView === 'files' && (
                         <>
                             <FileUploadWidget onUploadSuccess={fetchFiles} />
                             <FileManagerWidget
-                                files={files}
-                                isLoading={loadingStates.files}
-                                error={fileError}
-                                onDeleteFile={handleDeleteFile}
-                                onRenameFile={handleRenameFile}
-                                onGeneratePodcast={handleGeneratePodcast}
-                                onGenerateMindMap={handleGenerateMindMap}
-                                onChatWithFile={handleChatWithFile}
-                                isProcessing={isProcessing}
-                                onActionTaken={handleSidebarAction}
+                                files={files} isLoading={loadingStates.files} error={fileError}
+                                onDeleteFile={handleDeleteFile} onRenameFile={handleRenameFile}
+                                onGeneratePodcast={handleGeneratePodcast} onGenerateMindMap={handleGenerateMindMap}
+                                onChatWithFile={handleChatWithFile} isProcessing={isProcessing}
+                                onActionTaken={handleSidebarAction} onGenerateReport={handleGenerateReport}
+                                onGeneratePresentation={handleGeneratePresentation}
                             />
                         </>
                     )}
-                    {sidebarView === 'history' && (
-                        <HistorySidebarWidget onLoadSession={handleLoadSession} />
-                    )}
+                    {sidebarView === 'history' && (<HistorySidebarWidget onLoadSession={handleLoadSession} />)}
                     {sidebarView === 'settings' && (
-                        <SettingsWidget 
-                           selectedPromptId={currentSystemPromptId}
-                           promptText={editableSystemPromptText}
-                           onSelectChange={handlePromptSelectChange}
-                           onTextChange={handlePromptTextChange}
+                        <SettingsWidget selectedPromptId={currentSystemPromptId} promptText={editableSystemPromptText}
+                            onSelectChange={handlePromptSelectChange} onTextChange={handlePromptTextChange}
                         />
                     )}
+                    {sidebarView === 'syllabus' && (<SyllabusWidget onChatWithSyllabus={handleChatWithSyllabus} />)}
                 </div>
             </div>
-    
             <div className="chat-container">
                 <header className="chat-header">
                     <div className="header-left">
-                        <button onClick={() => setIsSidebarExpanded(p => !p)} className="header-button hamburger-button-mobile" title="Toggle Menu">
-                            <FaBars />
-                        </button>
+                        <button onClick={() => setIsSidebarExpanded(p => !p)} className="header-button hamburger-button-mobile" title="Toggle Menu"> <FaBars /> </button>
                         <h1>TutorAI</h1>
+                    </div>
+                    <div className="header-center">
+                        {renderChatModeInfo()}
                     </div>
                     <div className="header-right">
                         <MuiIconButton onClick={handleProfileClick} title="Profile">
                             <div className="avatar profile-avatar">{username?.[0]?.toUpperCase()}</div>
                         </MuiIconButton>
-                        <Popover
-                            open={isProfileOpen}
-                            anchorEl={profileAnchorEl}
-                            onClose={handleProfileClose}
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                        <Popover open={isProfileOpen} anchorEl={profileAnchorEl} onClose={handleProfileClose}
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                         >
                             <Box sx={{ p: 2, minWidth: '240px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444', borderRadius: '8px' }}>
-                                <Typography variant="subtitle1" gutterBottom>
-                                    Signed in as
-                                </Typography>
-                                <Typography variant="body1" color="text.primary" sx={{ mb: 2, fontWeight: 'bold' }}>
-                                    {username}
-                                </Typography>
-                                <Button
-                                    fullWidth
-                                    variant="contained"
-                                    color="error"
-                                    startIcon={<FaSignOutAlt />}
-                                    sx={{ 
-                                        textTransform: 'none', 
-                                        backgroundColor: '#B00020', 
-                                        '&:hover': { backgroundColor: '#D50000' } 
-                                    }}
-                                    onClick={() => handleLogout(false)}
-                                >
-                                    Logout
-                                </Button>
+                                <Typography variant="subtitle1" gutterBottom> Signed in as </Typography>
+                                <Typography variant="body1" color="text.primary" sx={{ mb: 2, fontWeight: 'bold' }}> {username} </Typography>
+                                <Button fullWidth variant="contained" color="error" startIcon={<FaSignOutAlt />}
+                                    sx={{ textTransform: 'none', backgroundColor: '#B00020', '&:hover': { backgroundColor: '#D50000' } }} onClick={() => handleLogout(false)}
+                                > Logout </Button>
                             </Box>
                         </Popover>
                     </div>
                 </header>
-    
                 <main className="messages-area">
                     {messages.length === 0 && !isProcessing && (
                         <div className="welcome-message">
@@ -518,94 +552,72 @@ const ChatPage = ({ setIsAuthenticated }) => {
                         </div>
                     )}
                     {messages.map((msg, index) => {
-                         if (!msg?.role || !msg?.parts?.length) return null;
-                         const messageText = msg.parts[0]?.text || '';
-                         return (
-                             <div key={index} className={`message-row ${msg.role}`}>
-                                 <div className="avatar">
-                                     {msg.role === 'user' ? (username?.[0]?.toUpperCase() || 'U') : <GeminiIcon />}
-                                 </div>
-                                 <div className="message-bubble-container">
-                                     <div className={`message-bubble ${msg.type || ''}`}>
-                                         {msg.type === 'mindmap' && msg.mindMapData ? (
-                                             <div className="mindmap-container">
-                                                 <MindMap mindMapData={msg.mindMapData} />
-                                             </div>
-                                         ) : msg.type === 'audio' && msg.audioUrl ? (
-                                             <div className="audio-player-container">
-                                                 <p>{messageText}</p>
-                                                 <audio controls src={msg.audioUrl} />
-                                             </div>
-                                         ) : (
-                                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{messageText}</ReactMarkdown>
-                                         )}
-                                     </div>
-                                     <div className="message-actions">
-                                         {msg.role === 'assistant' && (
-                                             <button
-                                                 onClick={() => handleTextToSpeech(messageText, index)}
-                                                 className={`tts-button ${currentlySpeakingIndex === index ? 'speaking' : ''}`}
-                                                 title="Read aloud"
-                                                 disabled={isProcessing}
-                                             >
-                                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/><path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>
-                                             </button>
-                                         )}
-                                     </div>
-                                 </div>
-                             </div>
-                         );
+                        if (!msg?.role || !msg?.parts?.length) return null;
+                        const messageText = msg.parts[0]?.text || '';
+                        return (
+                            <div key={index} className={`message-row ${msg.role}`}>
+                                <div className="avatar">
+                                    {msg.role === 'user' ? (username?.[0]?.toUpperCase() || 'U') : <GeminiIcon />}
+                                </div>
+                                <div className="message-bubble-container">
+                                    <div className={`message-bubble ${msg.type || ''}`}>
+                                        {msg.type === 'mindmap' && msg.mindMapData ? (
+                                            <div className="mindmap-container"> <MindMap mindMapData={msg.mindMapData} /> </div>
+                                        ) : msg.type === 'audio' && msg.audioUrl ? (
+                                            <div className="audio-player-container">
+                                                <p>{messageText}</p>
+                                                <audio controls src={msg.audioUrl} />
+                                            </div>
+                                        ) : ( <ReactMarkdown remarkPlugins={[remarkGfm]}>{messageText}</ReactMarkdown> )}
+                                    </div>
+                                    <div className="message-actions">
+                                        {msg.role === 'assistant' && (
+                                            <button
+                                                onClick={() => handleTextToSpeech(messageText, index)}
+                                                className={`tts-button ${currentlySpeakingIndex === index ? 'speaking' : ''}`}
+                                                title="Read aloud" disabled={isProcessing}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/><path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
                     })}
+                    {isProcessing && (
+                        <div className="message-row assistant">
+                            <div className="avatar"><GeminiIcon /></div>
+                            <div className="message-bubble-container">
+                                <div className="message-bubble">
+                                    <div className="loading-indicator-dots">
+                                        <div /> <div /> <div />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <div ref={messagesEndRef} />
                 </main>
-    
                 <footer className="chat-footer">
                     <div className="input-area-container">
+                        {renderChatModeInfo()}
                         <form className="modern-input-bar" onSubmit={handleSendMessage}>
-                            <button
-                                type="button"
-                                className={`input-action-btn ${isDeepSearchEnabled ? 'active' : ''}`}
-                                title="Deep Research"
-                                onClick={() => { setIsDeepSearchEnabled(v => !v); setIsRagEnabled(false); }}
-                                disabled={isProcessing}
-                            >
-                                DS
-                            </button>
-                            <button
-                                type="button"
-                                className={`input-action-btn ${isRagEnabled ? 'active' : ''}`}
-                                title="Chat with your documents"
-                                onClick={() => { setIsRagEnabled(v => !v); setIsDeepSearchEnabled(false); }}
-                                disabled={isProcessing || !files.length}
-                            >
-                                RAG
-                            </button>
-                            <textarea
-                                value={inputText}
-                                onChange={e => setInputText(e.target.value)}
-                                onKeyDown={handleEnterKey}
-                                placeholder="Enter a prompt here"
-                                className="modern-input"
-                                disabled={isProcessing}
-                                rows="1"
-                            />
-                            <button
-                                type="button"
-                                className="input-action-btn mic-button"
-                                title="Use microphone"
-                                onClick={handleMicButtonClick}
-                                disabled={isProcessing}
-                            >
-                                <FaMicrophone />
-                            </button>
-                            <button
-                                type="submit"
-                                className="input-action-btn send-button"
-                                title="Send message"
-                                disabled={isProcessing || !inputText.trim()}
-                            >
-                                <FaPaperPlane />
-                            </button>
+                            <button type="button" className={`input-action-btn ${chatMode === ChatMode.DeepSearch ? 'active' : ''}`} title="Deep Research"
+                                onClick={() => setChatMode(chatMode === ChatMode.DeepSearch ? ChatMode.Standard : ChatMode.DeepSearch)}
+                                disabled={isProcessing}> DS </button>
+                            <button type="button" className={`input-action-btn ${chatMode === ChatMode.Agentic ? 'active' : ''}`} title="Agentic Mode"
+                                onClick={() => setChatMode(chatMode === ChatMode.Agentic ? ChatMode.Standard : ChatMode.Agentic)}
+                                disabled={isProcessing}> <FaTasks /> </button>
+                            <button type="button" className={`input-action-btn ${chatMode === ChatMode.RAG ? 'active' : ''}`} title="Chat with your documents"
+                                onClick={() => setChatMode(chatMode === ChatMode.RAG ? ChatMode.Standard : ChatMode.RAG)}
+                                disabled={isProcessing || !files.length}> RAG </button>
+                            <textarea value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={handleEnterKey}
+                                placeholder="Enter a prompt here" className="modern-input" disabled={isProcessing} rows="1" />
+                            <button type="button" className="input-action-btn mic-button" title="Use microphone"
+                                onClick={handleMicButtonClick} disabled={isProcessing}> <FaMicrophone /> </button>
+                            <button type="submit" className="input-action-btn send-button" title="Send message"
+                                disabled={isProcessing || !inputText.trim()}> <FaPaperPlane /> </button>
                         </form>
                         {error && <p className="error-message">{error}</p>}
                     </div>

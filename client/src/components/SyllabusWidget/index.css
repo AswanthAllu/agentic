@@ -1,0 +1,73 @@
+/* SyllabusWidget/index.css */
+.syllabus-widget {
+    padding-top: 10px;
+}
+
+.syllabus-widget h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--primary-text-color);
+}
+
+.syllabus-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.syllabus-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--hover-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: background-color 0.2s;
+}
+
+.syllabus-item:hover {
+    background-color: #3c4043;
+}
+
+.syllabus-name {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--primary-text-color);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.95rem;
+}
+
+.syllabus-chat-btn {
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.2s;
+}
+
+.syllabus-chat-btn:hover {
+    background-color: #1b5e20;
+}
+
+.info-box {
+    background-color: #282a2c;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 24px;
+    color: #b0b0b0;
+    font-size: 0.9rem;
+}

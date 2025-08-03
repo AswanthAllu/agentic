@@ -1,4 +1,6 @@
 // server/services/HybridRagService.js
+// This file is now deprecated in favor of ChatService.js
+// It will be removed in a future update.
 
 const serviceManager = require('./serviceManager');
 const File = require('../models/File');
@@ -22,15 +24,11 @@ class HybridRagService {
     }
 
     async ensureFileIsLoaded(fileId, userId) {
-        if (loadedFilesCache.has(fileId)) {
-            return;
-        }
+        if (loadedFilesCache.has(fileId)) { return; }
         console.log(`[RAG Service] File ${fileId} not in memory. Processing on-demand...`);
         const { documentProcessor } = serviceManager.getServices();
         const file = await File.findOne({ _id: fileId, user: userId });
-        if (!file) {
-            throw new Error(`File not found or user not authorized for fileId: ${fileId}`);
-        }
+        if (!file) { throw new Error(`File not found or user not authorized for fileId: ${fileId}`); }
         await documentProcessor.processFile(file.path, {
             userId: file.user.toString(),
             fileId: file._id.toString(),
@@ -42,24 +40,18 @@ class HybridRagService {
 
     async processQuery(query, userId, fileId) {
         const { vectorStore } = serviceManager.getServices();
-
         if (!fileId) {
             return {
                 message: "Please select a file to chat with from the 'My Files' list before asking a question in RAG mode.",
                 metadata: { searchType: 'rag_error', sources: [] }
             };
         }
-
         const correctedQuery = await this.correctAndClarifyQuery(query);
         await this.ensureFileIsLoaded(fileId, userId);
-
         const relevantChunks = await vectorStore.searchDocuments(correctedQuery, {
-            limit: 5,
-            filters: { userId, fileId }
+            limit: 5, filters: { userId, fileId }
         });
-
         const isContextSufficient = relevantChunks.length > 0 && relevantChunks[0].score > RAG_CONFIDENCE_THRESHOLD;
-
         if (isContextSufficient) {
             console.log('[RAG Service] Context sufficient. Answering from document.');
             const context = relevantChunks.map(chunk => chunk.content).join('\n\n');
@@ -70,7 +62,6 @@ class HybridRagService {
                 metadata: { searchType: 'rag', sources: this.formatSources(relevantChunks) }
             };
         } else {
-            // --- UPDATED LOGIC: No more web search. Just give a fallback message. ---
             console.log('[RAG Service] Context insufficient. Returning fallback message.');
             return {
                 message: "I couldn't find a confident answer for that in your document. Please try rephrasing your question or asking something else about the file.",

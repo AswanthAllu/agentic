@@ -1,94 +1,56 @@
 // server/routes/podcast.js
-
 const express = require('express');
 const router = express.Router();
 const { tempAuth } = require('../middleware/authMiddleware');
 const File = require('../models/File');
-const { documentProcessor, geminiAI } = require('../services/serviceManager');
+const serviceManager = require('../services/serviceManager');
 const { generatePodcastAudio } = require('../services/podcastGenerator');
 const path = require('path');
 const fs = require('fs');
 
-// @route   POST /api/podcast/generate
-// @desc    Generate a podcast from a file
-// @access  Private
 router.post('/generate', tempAuth, async (req, res) => {
     const { fileId } = req.body;
     const userId = req.user.id;
+    const logger = req.logger;
 
     if (!fileId) {
         return res.status(400).json({ message: 'File ID is required.' });
     }
 
     try {
-        console.log(`[Podcast] Generation request for fileId: ${fileId}`);
-
-        // 1. Find the file in the database
+        logger.log('podcast_generation_requested', { userId, fileId });
         const file = await File.findOne({ _id: fileId, user: userId });
         if (!file) {
-            console.log(`[Podcast] File not found for id: ${fileId}`);
+            logger.warn('podcast_file_not_found', { userId, fileId });
             return res.status(404).json({ message: 'File not found.' });
         }
-
-        // 2. Ensure the file exists on disk
         if (!fs.existsSync(file.path)) {
-            console.log(`[Podcast] File not found on disk: ${file.path}`);
+            logger.warn('podcast_file_on_disk_not_found', { userId, fileId });
             return res.status(404).json({ message: 'File not found on disk.' });
         }
 
-        // 3. Process the document to get its text content
-        // We use the documentProcessor's parsing capabilities
-        const doc = await documentProcessor.parseFile(file.path, file.mimetype);
-        // Support both string and object returns from parseFile
-        let documentContent = '';
-        if (typeof doc === 'string') {
-            documentContent = doc;
-        } else if (doc && typeof doc.pageContent === 'string') {
-            documentContent = doc.pageContent;
-        } else {
-            documentContent = '';
-        }
-        // Add debug log for doc result
-        console.log(`[Podcast][Debug] Parsed document:`, doc);
-        if (documentContent) {
-            console.log(`[Podcast][Debug] Document content length: ${documentContent.length}`);
-            if (documentContent.length < 500) {
-                console.log(`[Podcast][Debug] Document content preview:`, documentContent);
-            }
-        } else {
-            console.log(`[Podcast][Debug] No document content extracted.`);
-        }
-
+        const { documentProcessor, multiLLMManager } = serviceManager.getServices();
+        const documentContent = await documentProcessor.parseFile(file.path, file.mimetype);
+        
         if (!documentContent || documentContent.trim().length < 500) {
-            console.log(`[Podcast] Not enough content in file ${fileId} to generate a podcast.`);
+            logger.warn('podcast_insufficient_content', { userId, fileId, length: documentContent.length });
             return res.status(400).json({ message: 'The document does not have enough content to generate a podcast.' });
         }
         
-        console.log(`[Podcast] Generating script for "${file.originalname}"...`);
-
-        // 4. Use GeminiAI service to generate the podcast script (always English)
-        const script = await geminiAI.generatePodcastScript(documentContent);
-        // Add debug log for script
-        console.log(`[Podcast][Debug] Podcast script:`, script);
-
-        console.log(`[Podcast] Script generated. Generating audio...`);
-
-        // 5. Use the podcastGenerator service to create the audio file (always English)
-        const podcastUrl = await generatePodcastAudio(script, file.originalname);
-        // Add debug log for podcastAudio
-        console.log(`[Podcast][Debug] Podcast audio result:`, podcastUrl);
+        logger.log('podcast_script_generation_started', { userId, fileId });
+        const script = await multiLLMManager.generatePodcastScript(documentContent);
         
-        console.log(`[Podcast] Audio generated and saved at ${podcastUrl}`);
-
-        // 6. Send back the path to the generated podcast
+        logger.log('podcast_audio_generation_started', { userId, fileId });
+        const podcastUrl = await generatePodcastAudio(script, file.originalname);
+        
+        logger.log('podcast_generation_success', { userId, fileId, podcastUrl });
         res.json({
             message: 'Podcast generated successfully!',
             podcastUrl: podcastUrl,
-            script: script, // Optionally return the script
+            script: script,
         });
-
     } catch (error) {
-        console.error('Error generating podcast:', error);
+        logger.error('podcast_generation_failed', { userId, fileId, error: error.message });
         res.status(500).json({ message: 'Failed to generate podcast.', error: error.message });
     }
 });

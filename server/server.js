@@ -1,18 +1,17 @@
 // server/server.js
 const path = require('path');
 const dotenv = require('dotenv');
-const multer = require('multer');
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const fs = require('fs');
 
-const langchainVectorStore = require('./services/LangchainVectorStore');
 const connectDB = require('./config/db');
 const { getLocalIPs } = require('./utils/networkUtils');
 const { performAssetCleanup } = require('./utils/assetCleanup');
-const File = require('./models/File');
 const serviceManager = require('./services/serviceManager');
+const LoggingService = require('./services/LoggingService');
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
@@ -27,7 +26,7 @@ if (!GEMINI_API_KEY) {
 }
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] }));
 app.use(express.json());
 
 const startServer = async () => {
@@ -41,12 +40,13 @@ const startServer = async () => {
 
         app.use((req, res, next) => {
             req.serviceManager = serviceManager;
+            req.logger = new LoggingService(req);
             next();
         });
 
         app.use('/podcasts', express.static(path.join(__dirname, 'public', 'podcasts')));
+        app.use('/syllabi', express.static(path.join(__dirname, 'syllabi')));
 
-        // Routes
         app.get('/', (req, res) => res.send('Chatbot Backend API is running...'));
         app.use('/api/network', require('./routes/network'));
         app.use('/api/auth', require('./routes/auth'));
@@ -55,14 +55,17 @@ const startServer = async () => {
         app.use('/api/files', require('./routes/files'));
         app.use('/api/podcast', require('./routes/podcast'));
         app.use('/api/mindmap', require('./routes/mindmap'));
-
+        app.use('/api/syllabus', require('./routes/syllabus'));
+        app.use('/api/reports', require('./routes/reports'));
+        app.use('/api/presentations', require('./routes/presentations'));
+        
         const availableIPs = getLocalIPs();
         app.listen(PORT, '0.0.0.0', () => {
             console.log('\n=== Server Ready ===');
             console.log(`🚀 Server listening on port ${PORT}`);
             console.log('Access URLs:');
             availableIPs.forEach(ip => {
-                console.log(`   - http://${ip}:3004 (Frontend) -> Backend: http://${ip}:${PORT}`);
+                console.log(`  - http://${ip}:3004 (Frontend) -> Backend: http://${ip}:${PORT}`);
             });
             console.log('==================\n');
         });

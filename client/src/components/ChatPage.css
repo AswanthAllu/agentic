@@ -41,10 +41,10 @@ body, html {
 .sidebar-area.expanded {
     left: 0; box-shadow: 4px 0px 25px rgba(0,0,0,0.3);
 }
-.sidebar-icons { display: none; } /* Hidden on mobile by default */
+.sidebar-icons { display: none; }
 .sidebar-content {
     width: 100%; padding: 24px; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 0; /* Adjusted gap */
+    display: flex; flex-direction: column; gap: 0;
 }
 .drawer-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -59,7 +59,6 @@ body, html {
     flex-direction: column;
     gap: 8px;
 }
-
 .mobile-nav-button {
     display: flex;
     align-items: center;
@@ -76,29 +75,22 @@ body, html {
     transition: background-color 0.2s;
     text-align: left;
 }
-
-.mobile-nav-button:hover {
-    background-color: var(--hover-color);
-}
-
+.mobile-nav-button:hover { background-color: var(--hover-color); }
 .mobile-nav-button.active {
     background-color: var(--user-gradient-end);
     color: white;
 }
-
 .sidebar-divider {
     height: 1px;
     background-color: var(--border-color);
     margin: 16px 0;
 }
 
-
 /* === Chat Container & Header === */
 .chat-container {
     flex-grow: 1; display: flex; flex-direction: column;
     overflow: hidden; height: 100%; width: 100%;
 }
-
 .chat-header {
     display: flex;
     align-items: center;
@@ -108,22 +100,25 @@ body, html {
     width: 100%;
     box-sizing: border-box;
 }
-
 .header-left, .header-right {
     display: flex;
     align-items: center;
     gap: 8px;
 }
-
+.header-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+}
 .hamburger-button-mobile {
     background: none; border: none; color: var(--secondary-text-color);
     width: 40px; height: 40px; border-radius: 50%;
     font-size: 1.25rem; display: flex; align-items: center; justify-content: center;
     transition: background-color 0.2s;
 }
-.hamburger-button-mobile:hover {
-    background-color: var(--hover-color);
-}
+.hamburger-button-mobile:hover { background-color: var(--hover-color); }
 .chat-header h1 {
     margin: 0;
     font-size: 1.25rem;
@@ -132,20 +127,15 @@ body, html {
 
 /* === Desktop Gemini-style Sidebar === */
 @media (min-width: 1024px) {
-    /* Hide mobile-specific elements */
     .hamburger-button-mobile, .drawer-overlay, .mobile-sidebar-nav, .sidebar-divider { 
         display: none !important; 
     }
-
-    /* Show desktop-specific elements */
     .sidebar-icons {
         display: flex; flex-direction: column; justify-content: space-between;
         align-items: center; width: var(--sidebar-icons-width);
         padding: 16px 0; flex-shrink: 0; background-color: var(--surface-color);
     }
-    
     .sidebar-area { position: relative; left: auto; width: auto; transition: none; }
-    
     .sidebar-icons-top, .sidebar-icons-bottom {
         display: flex; flex-direction: column; align-items: center; gap: 16px;
     }
@@ -165,7 +155,7 @@ body, html {
         border-left: 1px solid var(--border-color);
         transition: max-width 0.3s ease-in-out, padding 0.3s ease-in-out, opacity 0.3s ease-in-out;
         opacity: 1; overflow-x: hidden;
-        gap: 24px; /* Restore gap for desktop */
+        gap: 24px;
     }
     .sidebar-area.collapsed .sidebar-content {
         max-width: 0; padding-left: 0; padding-right: 0;
@@ -211,3 +201,8 @@ body, html {
 .input-action-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 .input-action-btn.active { background-color: var(--user-gradient-end); color: white; }
 .error-message { color: #f48fb1; text-align: center; font-size: 0.9rem; margin-top: 8px; }
+.loading-indicator-dots { display: inline-block; }
+.loading-indicator-dots div { display: inline-block; width: 8px; height: 8px; background-color: var(--secondary-text-color); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; margin: 0 2px; }
+.loading-indicator-dots div:nth-child(1) { animation-delay: -0.32s; }
+.loading-indicator-dots div:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }

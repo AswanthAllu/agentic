@@ -1,7 +1,8 @@
+// server/controllers/chatController.js
 const { ChatSession } = require('../models/ChatSession');
 const { v4: uuidv4 } = require('uuid');
-const HybridRagService = require('../services/HybridRagService');
-const serviceManager = require('../services/serviceManager');
+const File = require('../models/File');
+const { MESSAGE_TYPES } = require('../models/ChatSession');
 
 const getSessions = async (req, res) => {
     try {
@@ -43,41 +44,40 @@ const createSession = async (req, res) => {
 };
 
 const saveChatHistory = async (req, res) => {
-     const { sessionId, messages, systemPrompt, title } = req.body;
-     if (!sessionId || !messages) {
-         return res.status(400).json({ message: 'Session ID and messages are required.' });
-     }
-     try {
-         const updatedSession = await ChatSession.findOneAndUpdate(
-             { sessionId: sessionId, user: req.user.id },
-             { 
-                 $set: {
-                     messages: messages,
-                     systemPrompt: systemPrompt,
-                     title: title || 'New Conversation',
-                     user: req.user.id
-                 }
-             },
-             { new: true, upsert: true, setDefaultsOnInsert: true }
-         );
-         res.status(201).json(updatedSession);
-     } catch (error) {
-         console.error('Error saving chat session:', error);
-         res.status(500).json({ message: 'Server error while saving chat history.' });
-     }
+    const { sessionId, messages, systemPrompt, title } = req.body;
+    if (!sessionId || !messages) {
+        return res.status(400).json({ message: 'Session ID and messages are required.' });
+    }
+    try {
+        const updatedSession = await ChatSession.findOneAndUpdate(
+            { sessionId: sessionId, user: req.user.id },
+            { 
+                $set: {
+                    messages: messages,
+                    systemPrompt: systemPrompt,
+                    title: title || 'New Conversation',
+                    user: req.user.id
+                }
+            },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+        req.logger.log('chat_history_saved', { userId: req.user.id, sessionId });
+        res.status(201).json(updatedSession);
+    } catch (error) {
+        req.logger.error('chat_history_save_failed', { userId: req.user.id, sessionId, error: error.message });
+        res.status(500).json({ message: 'Server error while saving chat history.' });
+    }
 };
 
 const handleStandardMessage = async (req, res) => {
     const { query, history = [], systemPrompt } = req.body;
-    
     if (!query) {
         return res.status(400).json({ message: 'Query is required.' });
     }
-
     try {
-        const { geminiAI } = serviceManager.getServices();
-        const responseText = await geminiAI.generateChatResponse(query, [], history, systemPrompt);
-        res.json({ message: responseText });
+        const { chatService } = req.serviceManager.getServices();
+        const response = await chatService.handleStandardMessage(query, history, systemPrompt);
+        res.json(response);
     } catch (error) {
         console.error("Standard chat error:", error);
         res.status(500).json({ message: "Failed to get a response from the AI." });
@@ -94,7 +94,7 @@ const handleDeepSearch = async (req, res) => {
         return res.status(400).json({ message: 'Query is required' });
     }
     try {
-        const deepSearchService = serviceManager.getDeepSearchService(req.user.id);
+        const deepSearchService = req.serviceManager.getDeepSearchService(req.user.id);
         const result = await deepSearchService.performSearch(query, history);
         res.status(200).json({
             message: result.summary,
@@ -131,17 +131,30 @@ const handleHybridRagMessage = async (req, res) => {
     try {
         const { query, fileId, allowDeepSearch } = req.body;
         const userId = req.user.id;
-
         if (!query) {
             return res.status(400).json({ message: 'Query is required.' });
         }
-
-        const result = await HybridRagService.processQuery(query, userId, fileId, allowDeepSearch);
+        const { chatService } = req.serviceManager.getServices();
+        const result = await chatService.handleHybridRagMessage(query, userId, fileId, allowDeepSearch);
         res.status(200).json(result);
-
     } catch (error) {
         console.error('Hybrid RAG Error:', error);
         res.status(500).json({ message: 'An error occurred during the RAG process.' });
+    }
+};
+
+const handleAgenticTask = async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) {
+            return res.status(400).json({ message: 'Query is required.' });
+        }
+        const { chatService } = req.serviceManager.getServices();
+        const response = await chatService.handleAgenticTask(query, req.user.id);
+        res.status(200).json({ message: response });
+    } catch (error) {
+        console.error('Agentic Task Error:', error);
+        res.status(500).json({ message: 'An error occurred during the agentic process.' });
     }
 };
 
@@ -155,4 +168,5 @@ module.exports = {
     handleDeepSearch,
     deleteSession,
     handleHybridRagMessage,
+    handleAgenticTask
 };

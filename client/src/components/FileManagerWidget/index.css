@@ -1,12 +1,9 @@
 /* FileManagerWidget/index.css */
 .file-manager-widget {
-    background-color: transparent; /* Updated to blend with sidebar */
+    background-color: transparent;
     border-radius: 8px;
-    padding: 0; /* Updated */
+    padding: 0;
 }
-
-/* No change to h3, as it's handled by the parent ChatPage.css */
-
 .file-list {
     list-style-type: none;
     padding: 0;
@@ -14,7 +11,6 @@
     max-height: 200px;
     overflow-y: auto;
 }
-
 .file-item {
     display: flex;
     align-items: center;
@@ -26,11 +22,9 @@
     color: var(--primary-text-color);
     transition: background-color 0.2s;
 }
-
 .file-item:hover {
     background-color: #3c4043;
 }
-
 .file-name {
     font-weight: 500;
     white-space: nowrap;
@@ -38,7 +32,6 @@
     text-overflow: ellipsis;
     margin-right: 10px;
 }
-
 .menu-button {
     background: none;
     border: none;
@@ -54,7 +47,6 @@
 .menu-button:hover {
     background-color: rgba(255, 255, 255, 0.1);
 }
-
 .popover-menu {
     background-color: #282a2c;
     border-radius: 8px;
@@ -97,8 +89,7 @@
     background-color: var(--border-color);
     margin: 8px 0;
 }
-.file-manager-loading,
-.file-manager-error {
+.file-manager-loading, .file-manager-error {
     text-align: center;
     color: var(--secondary-text-color);
     padding: 20px;

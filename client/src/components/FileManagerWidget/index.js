@@ -1,7 +1,7 @@
 // src/components/FileManagerWidget/index.js
 import React, { useState } from 'react';
 import { Popover } from 'react-tiny-popover';
-import { FaTrash, FaEdit, FaFileAudio, FaProjectDiagram, FaEllipsisV, FaCommentDots } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaFileAudio, FaProjectDiagram, FaEllipsisV, FaCommentDots, FaFileWord, FaFilePowerpoint } from 'react-icons/fa';
 import './index.css';
 
 function FileManagerWidget({
@@ -13,12 +13,13 @@ function FileManagerWidget({
     onGeneratePodcast,
     onGenerateMindMap,
     onChatWithFile,
+    onGenerateReport,
+    onGeneratePresentation,
     isProcessing,
-    onActionTaken // New prop to notify parent of an action
+    onActionTaken
 }) {
     const [openMenuId, setOpenMenuId] = useState(null);
 
-    // This function now wraps all actions to ensure the sidebar can be closed
     const handleActionClick = (action, fileId, fileName) => {
         setOpenMenuId(null);
         action(fileId, fileName);
@@ -61,6 +62,12 @@ function FileManagerWidget({
                                         <button onClick={() => handleActionClick(onGenerateMindMap, file._id, file.originalname)} disabled={isProcessing} className="popover-menu-item">
                                             <FaProjectDiagram /> Generate Mind Map
                                         </button>
+                                        <button onClick={() => handleActionClick(onGenerateReport, file._id, file.originalname)} disabled={isProcessing} className="popover-menu-item">
+                                            <FaFileWord /> Generate Report
+                                        </button>
+                                        <button onClick={() => handleActionClick(onGeneratePresentation, file._id, file.originalname)} disabled={isProcessing} className="popover-menu-item">
+                                            <FaFilePowerpoint /> Generate Presentation
+                                        </button>
                                         <button onClick={() => handleActionClick(onRenameFile, file._id, file.originalname)} disabled={isProcessing} className="popover-menu-item">
                                             <FaEdit /> Rename
                                         </button>
@@ -85,6 +92,6 @@ function FileManagerWidget({
             )}
         </div>
     );
-};
+}
 
 export default FileManagerWidget;

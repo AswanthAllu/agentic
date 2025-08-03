@@ -1,19 +1,14 @@
 // server/routes/auth.js
-
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// @route   POST /api/auth/signup
-// @desc    Register a new user with username and password
-// @access  Public
 router.post('/signup', async (req, res) => {
-    // This route now correctly expects ONLY username and password
     const { username, password } = req.body;
+    const logger = req.logger;
 
-    // --- Validation for username and password ---
     if (!username || !password) {
         return res.status(400).json({ message: 'Please provide a username and password.' });
     }
@@ -22,18 +17,15 @@ router.post('/signup', async (req, res) => {
     }
 
     try {
-        // Check if username already exists
         let user = await User.findOne({ username });
         if (user) {
             return res.status(400).json({ message: 'Username is already taken.' });
         }
 
-        // Create a new user. The password will be hashed automatically by the
-        // pre-save hook we added to the User model.
         user = new User({ username, password });
         await user.save();
+        logger.log('user_signup', { userId: user.id, username: user.username });
 
-        // Create JWT
         const payload = { user: { id: user.id } };
         if (!process.env.JWT_SECRET) {
             console.error('FATAL ERROR: JWT_SECRET is not defined in your environment.');
@@ -43,18 +35,15 @@ router.post('/signup', async (req, res) => {
             if (err) throw err;
             res.status(201).json({
                 token,
-                user: { id: user.id, username: user.username } // Return user object without email
+                user: { id: user.id, username: user.username }
             });
         });
     } catch (err) {
-        console.error(err.message);
+        logger.error('signup_failed', { error: err.message, username });
         res.status(500).send('Server error');
     }
 });
 
-// @route   GET /api/auth/me
-// @desc    Get current user info from token
-// @access  Private
 router.get('/me', async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -65,7 +54,6 @@ router.get('/me', async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.user.id).select('-password');
         if (!user) return res.status(404).json({ message: 'User not found' });
-        // Always return both id and _id for frontend compatibility
         res.json({ user: { ...user.toObject(), id: user._id } });
     } catch (err) {
         if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
@@ -76,30 +64,26 @@ router.get('/me', async (req, res) => {
     }
 });
 
-// @route   POST /api/auth/signin
-// @desc    Authenticate user with username and password & get token
-// @access  Public
 router.post('/signin', async (req, res) => {
     const { username, password } = req.body;
+    const logger = req.logger;
 
     if (!username || !password) {
         return res.status(400).json({ message: 'Please provide a username and password.' });
     }
 
     try {
-        // Find user by username
         let user = await User.findOne({ username });
         if (!user) {
             return res.status(400).json({ message: 'Invalid credentials.' });
         }
 
-        // Check password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Invalid credentials.' });
         }
+        logger.log('user_signin', { userId: user.id, username: user.username });
 
-        // Create JWT
         const payload = { user: { id: user.id } };
         if (!process.env.JWT_SECRET) {
             console.error('FATAL ERROR: JWT_SECRET is not defined in your environment.');
@@ -109,11 +93,11 @@ router.post('/signin', async (req, res) => {
             if (err) throw err;
             res.json({
                 token,
-                user: { id: user.id, username: user.username } // Return user object without email
+                user: { id: user.id, username: user.username }
             });
         });
     } catch (err) {
-        console.error(err.message);
+        logger.error('signin_failed', { error: err.message, username });
         res.status(500).send('Server error');
     }
 });

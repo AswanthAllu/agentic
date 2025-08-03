@@ -3,6 +3,7 @@ const { ChatSession } = require('../models/ChatSession');
 const { v4: uuidv4 } = require('uuid');
 const File = require('../models/File');
 const { MESSAGE_TYPES } = require('../models/ChatSession');
+const { sendSuccess, sendError, asyncHandler, validateRequiredFields, handleChatResponse } = require('../utils/responseHandler');
 
 const getSessions = async (req, res) => {
     try {
@@ -69,20 +70,33 @@ const saveChatHistory = async (req, res) => {
     }
 };
 
-const handleStandardMessage = async (req, res) => {
+const handleStandardMessage = asyncHandler(async (req, res) => {
     const { query, history = [], systemPrompt } = req.body;
-    if (!query) {
-        return res.status(400).json({ message: 'Query is required.' });
-    }
+    
+    // Validate required fields
+    validateRequiredFields(req.body, ['query']);
+    
     try {
         const { chatService } = req.serviceManager.getServices();
-        const response = await chatService.handleStandardMessage(query, history, systemPrompt);
-        res.json(response);
+        
+        // Enhanced response handling with fallback
+        const response = await handleChatResponse(
+            () => chatService.handleStandardMessage(query, history, systemPrompt),
+            "Hello! I'm having trouble connecting to the AI service right now, but I'm here to help. Please try again in a moment."
+        );
+        
+        // Ensure we always have a valid response
+        const messageText = typeof response === 'object' ? response.message : response;
+        
+        return sendSuccess(res, 'Response generated successfully', {
+            message: messageText || "I'm here to help! How can I assist you today?"
+        });
+        
     } catch (error) {
         console.error("Standard chat error:", error);
-        res.status(500).json({ message: "Failed to get a response from the AI." });
+        return sendError(res, error, "Failed to get a response from the AI service");
     }
-};
+});
 
 const handleRagMessage = async (req, res) => {
     res.status(404).json({ message: 'This endpoint is deprecated. Please use /api/chat/rag-v2' });

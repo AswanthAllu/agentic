@@ -32,8 +32,12 @@ app.use(express.json());
 const startServer = async () => {
     try {
         console.log("--- Starting Server ---");
-        await connectDB(MONGO_URI);
-        console.log("✓ MongoDB connected successfully");
+        const dbConnection = await connectDB(MONGO_URI);
+        if (dbConnection) {
+            console.log("✓ MongoDB connected successfully");
+        } else {
+            console.log("⚠️  Running without database connection");
+        }
 
         await serviceManager.initialize();
         await performAssetCleanup();
@@ -48,16 +52,16 @@ const startServer = async () => {
         app.use('/syllabi', express.static(path.join(__dirname, 'syllabi')));
 
         app.get('/', (req, res) => res.send('Chatbot Backend API is running...'));
-        // app.use('/api/network', require('./routes/network'));
+        app.use('/api/network', require('./routes/network'));
         app.use('/api/auth', require('./routes/auth'));
-        // app.use('/api/chat', require('./routes/chat'));
+        app.use('/api/chat', require('./routes/chat'));
         app.use('/api/upload', require('./routes/upload'));
         app.use('/api/files', require('./routes/files'));
-        // app.use('/api/podcast', require('./routes/podcast'));
-        // app.use('/api/mindmap', require('./routes/mindmap'));
-        // app.use('/api/syllabus', require('./routes/syllabus'));
-        // app.use('/api/reports', require('./routes/reports'));
-        // app.use('/api/presentations', require('./routes/presentations'));
+        app.use('/api/podcast', require('./routes/podcast'));
+        app.use('/api/mindmap', require('./routes/mindmap'));
+        app.use('/api/syllabus', require('./routes/syllabus'));
+        app.use('/api/reports', require('./routes/reports'));
+        app.use('/api/presentations', require('./routes/presentations'));
         
         const availableIPs = getLocalIPs();
         app.listen(PORT, '0.0.0.0', () => {

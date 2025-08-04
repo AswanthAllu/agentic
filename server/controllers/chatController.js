@@ -76,25 +76,68 @@ const handleStandardMessage = asyncHandler(async (req, res) => {
     // Validate required fields
     validateRequiredFields(req.body, ['query']);
     
+    // Validate query content
+    if (!query.trim() || query.trim().length < 2) {
+        return sendError(res, new Error('Query must be at least 2 characters long'), 'Invalid query provided');
+    }
+    
     try {
         const { chatService } = req.serviceManager.getServices();
         
-        // Enhanced response handling with fallback
-        const response = await handleChatResponse(
-            () => chatService.handleStandardMessage(query, history, systemPrompt),
-            "Hello! I'm having trouble connecting to the AI service right now, but I'm here to help. Please try again in a moment."
-        );
+        // Direct call without fallback wrapper to get proper error handling
+        const response = await chatService.handleStandardMessage(query, history, systemPrompt);
         
-        // Ensure we always have a valid response
-        const messageText = typeof response === 'object' ? response.message : response;
+        // Validate response
+        if (!response || !response.message) {
+            throw new Error('Invalid response format from chat service');
+        }
+        
+        const messageText = response.message.trim();
+        
+        // Additional validation for response quality
+        if (messageText.length < 10) {
+            throw new Error('Response too short - please try rephrasing your question');
+        }
         
         return sendSuccess(res, 'Response generated successfully', {
-            message: messageText || "I'm here to help! How can I assist you today?"
+            message: messageText,
+            metadata: {
+                responseLength: messageText.length,
+                timestamp: new Date().toISOString(),
+                model: 'gemini-1.5-flash'
+            }
         });
         
     } catch (error) {
         console.error("Standard chat error:", error);
-        return sendError(res, error, "Failed to get a response from the AI service");
+        
+        // Provide specific error messages based on error type
+        let userMessage = "Failed to generate response";
+        let statusCode = 500;
+        
+        if (error.message?.includes('API key')) {
+            userMessage = "AI service configuration error. Please check your API key.";
+            statusCode = 503;
+        } else if (error.message?.includes('rate limit')) {
+            userMessage = "Service is currently experiencing high traffic. Please try again in a moment.";
+            statusCode = 429;
+        } else if (error.message?.includes('blocked')) {
+            userMessage = "Your request was blocked. Please try rephrasing your question.";
+            statusCode = 400;
+        } else if (error.message?.includes('quota')) {
+            userMessage = "Service quota exceeded. Please try again later.";
+            statusCode = 503;
+        } else if (error.message?.includes('configuration')) {
+            userMessage = "AI service is not properly configured. Please contact support.";
+            statusCode = 503;
+        }
+        
+        return res.status(statusCode).json({
+            success: false,
+            message: userMessage,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
     }
 });
 

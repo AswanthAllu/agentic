@@ -5,8 +5,10 @@ const { handleGeminiError, handleRAGError } = require('../utils/errorUtils');
 const MODEL_NAME = "gemini-1.5-flash"; // Default model
 
 const baseGenerationConfig = {
-    temperature: 0.7,
-    maxOutputTokens: 4096,
+    temperature: 0.3,  // Lower temperature for more accurate, focused responses
+    maxOutputTokens: 8192,  // Increased token limit for more comprehensive responses
+    topP: 0.8,  // Focus on top 80% of probability mass for better coherence
+    topK: 40,   // Consider top 40 tokens for balanced creativity and accuracy
 };
 
 const baseSafetySettings = [
@@ -107,19 +109,42 @@ class GeminiService {
     }
 
     async generateChatResponse(message, documentChunks = [], chatHistory = [], systemPrompt = '') {
-        if (!this.genAI) return "The AI service is currently unavailable. Please try again later.";
+        if (!this.genAI) {
+            console.error("Gemini AI service not initialized - API key missing or invalid");
+            throw new Error("AI service is not properly configured. Please check your API key configuration.");
+        }
+        
         try {
-            let fullSystemPrompt = systemPrompt || "You are a helpful AI assistant.";
+            // Enhanced system prompt for better accuracy
+            let fullSystemPrompt = systemPrompt || `You are an expert AI assistant. Provide accurate, helpful, and detailed responses. 
+Always base your answers on factual information and clearly indicate when you're uncertain about something.
+Be concise but comprehensive in your explanations.`;
+
             if (documentChunks && documentChunks.length > 0) {
-                const context = documentChunks.map(chunk => chunk.pageContent).join('\n\n');
-                fullSystemPrompt += `\n\n## Context from Documents:\n${context}`;
+                const context = documentChunks.map(chunk => chunk.pageContent || chunk.content).join('\n\n');
+                fullSystemPrompt += `\n\n## Context from Documents:\n${context}\n\nPlease base your response primarily on the provided context while supplementing with your general knowledge when appropriate.`;
             }
+
+            // Add conversation context awareness
+            if (chatHistory && chatHistory.length > 0) {
+                fullSystemPrompt += `\n\nMaintain consistency with the ongoing conversation and refer to previous messages when relevant.`;
+            }
+
             const model = this._configureModel(fullSystemPrompt.trim());
             const chat = model.startChat({ history: chatHistory });
             const result = await chat.sendMessage(message);
-            return this._processApiResponse(result.response);
+            
+            const response = this._processApiResponse(result.response);
+            
+            // Validate response quality
+            if (!response || response.trim().length < 10) {
+                throw new Error("Received inadequate response from AI service");
+            }
+            
+            return response;
         } catch (error) {
             console.error("Error in generateChatResponse:", error);
+            // Don't use fallback responses - throw the error to be handled properly
             throw handleGeminiError(error);
         }
     }

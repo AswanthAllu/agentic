@@ -9,38 +9,66 @@ class GeminiAI {
 
     async generateChatResponse(userMessage, documentChunks, chatHistory, systemPrompt = '') {
         const context = this.buildContext(documentChunks);
-        const prompt = this.buildSystemPrompt(systemPrompt, context, chatHistory) + `\nUser: ${userMessage}\nAssistant: `;
+        
+        // Enhanced prompt structure for better accuracy
+        const enhancedSystemPrompt = systemPrompt || `You are an expert AI assistant specialized in providing accurate, helpful, and comprehensive responses. 
+Follow these guidelines:
+1. Provide factual, well-reasoned answers
+2. If you're uncertain about something, clearly state your uncertainty
+3. Use the provided context when available and relevant
+4. Be thorough but concise in your explanations
+5. Maintain a helpful and professional tone`;
+
+        const prompt = this.buildSystemPrompt(enhancedSystemPrompt, context, chatHistory) + `\n\nUser Question: ${userMessage}\n\nProvide a detailed and accurate response:`;
         
         try {
             if (!this.model) {
-                console.warn('Gemini model not initialized, using fallback response');
-                return this.getFallbackResponse(userMessage, context);
+                console.error('Gemini model not initialized - API key likely missing or invalid');
+                throw new Error('AI service is not properly configured. Please check your Gemini API key.');
             }
             
             const result = await this.model.generateContent(prompt);
             const response = result.response;
             const responseText = response.text().trim();
             
-            // Validate response quality
-            if (!responseText || responseText.length < 3) {
-                console.warn('Received empty or very short response from Gemini, using fallback');
-                return this.getFallbackResponse(userMessage, context);
+            // Enhanced response validation
+            if (!responseText || responseText.length < 10) {
+                console.error('Received inadequate response from Gemini API');
+                throw new Error('Received an inadequate response from the AI service. Please try rephrasing your question.');
+            }
+            
+            // Check for generic or template responses that might indicate poor quality
+            const genericResponses = ['i apologize', 'i cannot', 'i don\'t have access', 'as an ai'];
+            const isGeneric = genericResponses.some(phrase => 
+                responseText.toLowerCase().includes(phrase) && responseText.length < 50
+            );
+            
+            if (isGeneric) {
+                console.warn('Detected potentially generic response, requesting more specific answer');
+                // Try again with more specific prompt
+                const specificPrompt = `${prompt}\n\nPlease provide a more specific and detailed answer to the user's question. Avoid generic responses.`;
+                const retryResult = await this.model.generateContent(specificPrompt);
+                const retryResponse = retryResult.response.text().trim();
+                return retryResponse || responseText; // Use retry response if available, otherwise original
             }
             
             return responseText;
         } catch (error) {
             console.error('Gemini chat response error:', error.message);
             
-            // Check for specific error types and provide appropriate fallbacks
+            // Throw specific errors instead of using fallbacks
             if (error.message?.includes('API key')) {
-                return "I'm currently unable to connect to the AI service due to configuration issues. Please ensure your API key is properly set up.";
+                throw new Error('AI service configuration error: Invalid or missing API key. Please check your Gemini API key configuration.');
             } else if (error.message?.includes('rate limit')) {
-                return "I'm experiencing high traffic right now. Please wait a moment and try again.";
+                throw new Error('AI service is currently experiencing high traffic. Please wait a moment and try again.');
             } else if (error.message?.includes('blocked')) {
-                return "I understand your question, but I'm not able to provide a response to that particular query. Could you try rephrasing it?";
+                throw new Error('Your request was blocked by content filters. Please try rephrasing your question.');
+            } else if (error.message?.includes('quota')) {
+                throw new Error('AI service quota exceeded. Please try again later or check your API usage limits.');
             }
             
-            return this.getFallbackResponse(userMessage, context);
+            // For other errors, throw a more informative message
+            throw new Error(`AI service error: ${error.message}. Please try again or contact support if the issue persists.`);
         }
     }
 

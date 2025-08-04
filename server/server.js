@@ -50,7 +50,7 @@ const startServer = async () => {
         app.get('/', (req, res) => res.send('Chatbot Backend API is running...'));
         // app.use('/api/network', require('./routes/network'));
         app.use('/api/auth', require('./routes/auth'));
-        // app.use('/api/chat', require('./routes/chat'));
+        app.use('/api/chat', require('./routes/chat'));
         app.use('/api/upload', require('./routes/upload'));
         app.use('/api/files', require('./routes/files'));
         // app.use('/api/podcast', require('./routes/podcast'));
